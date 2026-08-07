@@ -7,7 +7,7 @@
 		<style>
 		/* ──────────────────────────────────────────────
    Brand tokens – swap these to re-theme instantly
-   ────────────────────────────────────────────── */
+────────────────────────────────────────────── */
 		:root {
 			/* Raw brand palette */
 			--color-bz-yellow: #f5b83b;
@@ -19,17 +19,22 @@
 			--brand-bg: var(--color-bz-dark);
 			--brand-surface: var(--color-bz-white);
 			--brand-text: var(--color-bz-dark);
+			--brand-accent: var(--color-bz-yellow);
+			--brand-alert: var(--color-bz-red);
 
-			--brand-accent: var(--color-bz-yellow); /* "live" indicator   */
-			--brand-muted: rgba(255, 255, 255, 0.35); /* idle status text  */
+			--brand-muted: rgba(255, 255, 255, 0.35);
 
-			--card-shadow: rgba(17, 17, 17, 0.45);
-			--card-tape-bg: rgba(245, 184, 59, 0.55); /* translucent yellow */
+			--card-shadow: rgba(0, 0, 0, 0.45);
+			--card-tape-bg: rgba(245, 184, 59, 0.55);
 			--card-tape-border: rgba(245, 184, 59, 0.3);
 
-			--card-width: 300px;
-			--card-radius: 3px;
-			--gap: 1.4rem;
+			/* Bento grid */
+			--cell: 168px; /* base grid cell */
+			--gap: 14px;
+			--card-radius: 18px;
+
+			/* Card size scale (in cells) */
+			--s1: var(--cell);
 		}
 
 		/* ────────────────────────────────────────────── */
@@ -41,49 +46,221 @@
 
 		body {
 			min-height: 100vh;
-			background: var(--brand-bg);
+			background:
+				radial-gradient(
+					1200px 600px at 15% -10%,
+					rgba(245, 184, 59, 0.07),
+					transparent 60%
+				),
+				radial-gradient(
+					900px 500px at 95% 110%,
+					rgba(227, 24, 55, 0.06),
+					transparent 60%
+				),
+				var(--brand-bg);
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-			padding: 2.5rem;
-			display: flex;
-			flex-wrap: wrap;
-			gap: var(--gap);
-			align-content: flex-start;
-			justify-content: center;
+			padding: clamp(1rem, 3vw, 2.5rem);
 			overflow-x: hidden;
 		}
 
-		.card {
-			background: var(--brand-surface);
-			color: var(--brand-text);
-			padding: 1.3rem 1.5rem;
-			width: var(--card-width);
-			min-height: 80px;
-			border-radius: var(--card-radius);
-			box-shadow: 2px 5px 14px var(--card-shadow);
-			font-size: 1.05rem;
-			line-height: 1.55;
-			word-break: break-word;
-			animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-			position: relative;
+		/* ──────────────────────────────────────────────
+   Bento grid — dense packing, mixed card sizes
+────────────────────────────────────────────── */
+		.wall {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(var(--cell), 1fr));
+			grid-auto-rows: var(--cell);
+			grid-auto-flow: dense;
+			gap: var(--gap);
+			max-width: 1400px;
+			margin: 0 auto;
 		}
 
-		/* subtle "tape" strip at top */
+		/* ── Card base ── */
+		.card {
+			position: relative;
+			border-radius: var(--card-radius);
+			padding: 1.35rem 1.45rem;
+			display: flex;
+			align-items: flex-end;
+			overflow: hidden;
+			color: var(--brand-text);
+			background: var(--brand-surface);
+			background-image: linear-gradient(
+				160deg,
+				rgba(255, 255, 255, 0.9),
+				rgba(240, 240, 238, 0.95)
+			);
+			box-shadow:
+				0 1px 2px rgba(0, 0, 0, 0.25),
+				0 12px 32px -8px var(--card-shadow);
+			word-break: break-word;
+			overflow-wrap: anywhere;
+			line-height: 1.4;
+			animation: pop 0.55s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+			transition:
+				transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+				box-shadow 0.35s ease;
+		}
+
+		.card:hover {
+			transform: translateY(-4px) rotate(var(--tilt, 0deg)) scale(1.015);
+			box-shadow:
+				0 2px 4px rgba(0, 0, 0, 0.3),
+				0 24px 48px -12px var(--card-shadow);
+			z-index: 2;
+		}
+
+		/* Signature tape strip — kept, refined */
 		.card::before {
 			content: "";
 			position: absolute;
-			top: -8px;
+			top: -7px;
 			left: 50%;
-			transform: translateX(-50%) rotate(-1deg);
-			width: 60px;
-			height: 16px;
+			transform: translateX(-50%) rotate(var(--tape-rot, -1.5deg));
+			width: 64px;
+			height: 18px;
 			background: var(--card-tape-bg);
 			border: 1px solid var(--card-tape-border);
+			border-radius: 2px;
+			backdrop-filter: blur(2px);
+			z-index: 1;
+		}
+
+		/* Soft sheen for polish */
+		.card::after {
+			content: "";
+			position: absolute;
+			inset: 0;
+			border-radius: inherit;
+			pointer-events: none;
+			background: linear-gradient(
+				115deg,
+				rgba(255, 255, 255, 0.35) 0%,
+				transparent 30%
+			);
+		}
+
+		/* ── Size tiers: card footprint matches content length ──
+   xs  quote (<30 chars)      → 1×1, big type
+   sm  (30–80)                → 1×2 (wide)
+   md  (80–160)               → 1×2 or 2×1 handled by flow
+   lg  (160–300)              → 2×2
+   xl  (300+)                 → 2×3
+────────────────────────────────────────────── */
+		.card--xs {
+			grid-column: span 1;
+			grid-row: span 1;
+			font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+			font-weight: 700;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			line-height: 1.3;
+		}
+
+		.card--sm {
+			grid-column: span 2;
+			grid-row: span 1;
+			font-size: 1.02rem;
+			align-items: center;
+		}
+
+		.card--md {
+			grid-column: span 2;
+			grid-row: span 2;
+			font-size: 1.15rem;
+			align-items: flex-start;
+		}
+
+		.card--lg {
+			grid-column: span 2;
+			grid-row: span 2;
+			font-size: 1rem;
+			align-items: flex-start;
+		}
+
+		.card--xl {
+			grid-column: span 2;
+			grid-row: span 3;
+			font-size: 0.98rem;
+			align-items: flex-start;
+		}
+
+		/* clamp text so it never overflows its tile */
+		.card .text {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			position: relative;
+			z-index: 1;
+		}
+		.card--xs .text {
+			-webkit-line-clamp: 3;
+		}
+		.card--sm .text {
+			-webkit-line-clamp: 2;
+		}
+		.card--md .text {
+			-webkit-line-clamp: 6;
+		}
+		.card--lg .text {
+			-webkit-line-clamp: 9;
+		}
+		.card--xl .text {
+			-webkit-line-clamp: 13;
+		}
+
+		/* ── Color variants (deterministic per card) ── */
+		.card--accent {
+			background: var(--brand-accent);
+			background-image: linear-gradient(160deg, #ffcd5e, #eda92a);
+			color: var(--color-bz-dark);
+		}
+		.card--accent::before {
+			background: rgba(17, 17, 17, 0.75);
+			border-color: rgba(17, 17, 17, 0.35);
+		}
+
+		.card--dark {
+			background: #1c1c1c;
+			background-image: linear-gradient(160deg, #232323, #161616);
+			color: var(--brand-surface);
+			border: 1px solid rgba(255, 255, 255, 0.07);
+		}
+		.card--dark::after {
+			background: linear-gradient(
+				115deg,
+				rgba(255, 255, 255, 0.06) 0%,
+				transparent 30%
+			);
+		}
+
+		.card--alert {
+			background: var(--brand-alert);
+			background-image: linear-gradient(160deg, #f0294a, #c9132f);
+			color: #fff;
+		}
+		.card--alert::before {
+			background: rgba(255, 255, 255, 0.8);
+			border-color: rgba(255, 255, 255, 0.4);
+		}
+
+		/* tiny timestamp chip */
+		.meta {
+			position: absolute;
+			top: 0.8rem;
+			right: 1rem;
+			font-size: 0.62rem;
+			font-family: ui-monospace, monospace;
+			letter-spacing: 0.06em;
+			opacity: 0.45;
+			z-index: 1;
 		}
 
 		@keyframes pop {
 			from {
 				opacity: 0;
-				transform: scale(0.6) translateY(24px);
+				transform: scale(0.7) translateY(24px);
 			}
 			to {
 				opacity: 1;
@@ -91,34 +268,126 @@
 			}
 		}
 
+		/* ── Status pill ── */
 		.status {
 			position: fixed;
 			bottom: 1rem;
-			right: 1.5rem;
-			font-size: 0.75rem;
+			right: 1.25rem;
+			font-size: 0.72rem;
+			font-family: ui-monospace, monospace;
 			color: var(--brand-muted);
-			font-family: monospace;
+			background: rgba(255, 255, 255, 0.06);
+			border: 1px solid rgba(255, 255, 255, 0.09);
+			backdrop-filter: blur(8px);
+			padding: 0.4rem 0.85rem;
+			border-radius: 999px;
+			z-index: 10;
 		}
 		.status.connected {
 			color: var(--brand-accent);
+			border-color: rgba(245, 184, 59, 0.3);
+		}
+		.status.connected::before {
+			content: "●";
+			margin-right: 0.4rem;
+			animation: pulse 2s ease-in-out infinite;
+		}
+		@keyframes pulse {
+			50% {
+				opacity: 0.35;
+			}
+		}
+
+		/* ── Responsive ── */
+		@media (max-width: 720px) {
+			:root {
+				--cell: 128px;
+			}
+			.card--xl {
+				grid-row: span 4;
+			}
+		}
+		@media (max-width: 420px) {
+			.wall {
+				grid-template-columns: repeat(2, 1fr);
+			}
+			.card--sm,
+			.card--md,
+			.card--lg,
+			.card--xl {
+				grid-column: span 2;
+			}
+			.card--xs {
+				grid-column: span 1;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.card {
+				animation: none;
+				transition: none;
+			}
 		}
 		</style>
 	</head>
 	<body>
+		<div class="wall" id="wall"></div>
 		<div class="status" id="status">connecting…</div>
 
 		<script>
+		const wall = document.getElementById("wall");
 		const statusEl = document.getElementById("status");
 		let reconnectDelay = 1000;
 
-		function addCard(text) {
-			const el = document.createElement("div");
-			el.className = "card";
-			el.textContent = text; // safe — no innerHTML
-			const tilt = (Math.random() * 5 - 2.5).toFixed(1);
+		/* Map content length → card size tier, so each card
+   is proportionate to its own content. */
+		function tierFor(text) {
+			const n = text.length;
+			if (n < 30) return "xs";
+			if (n < 80) return "sm";
+			if (n < 160) return "md";
+			if (n < 300) return "lg";
+			return "xl";
+		}
+
+		/* Deterministic-ish color accent: mostly white,
+   with occasional yellow / dark / red feature cards. */
+		function variantFor(text) {
+			const r = Math.random();
+			if (text.length < 30) return r < 0.6 ? "card--accent" : "card--dark";
+			if (r < 0.1) return "card--accent";
+			if (r < 0.18) return "card--dark";
+			if (r < 0.22) return "card--alert";
+			return "";
+		}
+
+		function addCard(text, { delay = 0 } = {}) {
+			const tier = tierFor(text);
+
+			const el = document.createElement("article");
+			el.className = `card card--${tier} ${variantFor(text)}`.trim();
+
+			/* gentle rotation for a hand-placed feel */
+			const tilt = (Math.random() * 1.6 - 0.8).toFixed(2);
+			const tapeRot = (Math.random() * 5 - 2.5).toFixed(1);
 			el.style.setProperty("--tilt", tilt + "deg");
+			el.style.setProperty("--tape-rot", tapeRot + "deg");
 			el.style.transform = `rotate(${tilt}deg)`;
-			document.body.prepend(el);
+			el.style.animationDelay = delay + "ms";
+
+			const textEl = document.createElement("div");
+			textEl.className = "text";
+			textEl.textContent = text; // safe — no innerHTML
+
+			const meta = document.createElement("span");
+			meta.className = "meta";
+			meta.textContent = new Date().toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+
+			el.append(meta, textEl);
+			wall.prepend(el); // newest first; dense flow re-packs automatically
 		}
 
 		function connect() {
@@ -126,7 +395,7 @@
 			const ws = new WebSocket(`${proto}://${location.host}/ws`);
 
 			ws.onopen = () => {
-				statusEl.textContent = "● live";
+				statusEl.textContent = "live";
 				statusEl.className = "status connected";
 				reconnectDelay = 1000;
 			};
@@ -134,7 +403,7 @@
 			ws.onmessage = (e) => {
 				const msg = JSON.parse(e.data);
 				if (msg.type === "history") {
-					msg.items.forEach(addCard);
+					msg.items.forEach((text, i) => addCard(text, { delay: i * 60 }));
 				} else if (msg.type === "new") {
 					addCard(msg.text);
 				}
