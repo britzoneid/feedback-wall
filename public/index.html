@@ -5,6 +5,32 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>Feedback Wall</title>
 		<style>
+		/* ──────────────────────────────────────────────
+   Brand tokens – swap these to re-theme instantly
+   ────────────────────────────────────────────── */
+		:root {
+			/* Primary palette */
+			--brand-bg: #16162a;
+			--brand-surface: #fffef4;
+			--brand-text: #2c2c2c;
+
+			/* Accents */
+			--brand-accent: rgba(120, 255, 160, 0.6); /* "live" indicator */
+			--brand-muted: rgba(255, 255, 255, 0.35); /* idle status text  */
+
+			/* Card details */
+			--card-shadow: rgba(0, 0, 0, 0.4);
+			--card-tape-bg: rgba(255, 255, 200, 0.7);
+			--card-tape-border: rgba(200, 200, 150, 0.5);
+
+			/* Layout helpers (optional knobs) */
+			--card-width: 300px;
+			--card-radius: 3px;
+			--gap: 1.4rem;
+		}
+
+		/* ────────────────────────────────────────────── */
+
 		* {
 			margin: 0;
 			box-sizing: border-box;
@@ -12,25 +38,25 @@
 
 		body {
 			min-height: 100vh;
-			background: #16162a;
+			background: var(--brand-bg);
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 			padding: 2.5rem;
 			display: flex;
 			flex-wrap: wrap;
-			gap: 1.4rem;
+			gap: var(--gap);
 			align-content: flex-start;
 			justify-content: center;
 			overflow-x: hidden;
 		}
 
 		.card {
-			background: #fffef4;
-			color: #2c2c2c;
+			background: var(--brand-surface);
+			color: var(--brand-text);
 			padding: 1.3rem 1.5rem;
-			width: 300px;
+			width: var(--card-width);
 			min-height: 80px;
-			border-radius: 3px;
-			box-shadow: 2px 5px 14px rgba(0, 0, 0, 0.4);
+			border-radius: var(--card-radius);
+			box-shadow: 2px 5px 14px var(--card-shadow);
 			font-size: 1.05rem;
 			line-height: 1.55;
 			word-break: break-word;
@@ -47,8 +73,8 @@
 			transform: translateX(-50%) rotate(-1deg);
 			width: 60px;
 			height: 16px;
-			background: rgba(255, 255, 200, 0.7);
-			border: 1px solid rgba(200, 200, 150, 0.5);
+			background: var(--card-tape-bg);
+			border: 1px solid var(--card-tape-border);
 		}
 
 		@keyframes pop {
@@ -67,11 +93,11 @@
 			bottom: 1rem;
 			right: 1.5rem;
 			font-size: 0.75rem;
-			color: rgba(255, 255, 255, 0.35);
+			color: var(--brand-muted);
 			font-family: monospace;
 		}
 		.status.connected {
-			color: rgba(120, 255, 160, 0.6);
+			color: var(--brand-accent);
 		}
 		</style>
 	</head>
@@ -86,7 +112,6 @@
 			const el = document.createElement("div");
 			el.className = "card";
 			el.textContent = text; // safe — no innerHTML
-			// slight random tilt for the "postcard" feel
 			const tilt = (Math.random() * 5 - 2.5).toFixed(1);
 			el.style.setProperty("--tilt", tilt + "deg");
 			el.style.transform = `rotate(${tilt}deg)`;
