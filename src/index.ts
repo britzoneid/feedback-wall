@@ -1,4 +1,4 @@
-import { DurableObject } from "cloudflare:workers";
+import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 
 // ─────────────────────────────────────────────
 // Durable Object: manages WebSocket connections
@@ -94,36 +94,41 @@ export class FeedbackRoom extends DurableObject {
 }
 
 // ─────────────────────────────────────────────
-// Worker: routes requests
+// Worker entrypoint — now a class with RPC
 // ─────────────────────────────────────────────
-export default {
-	async fetch(request, env, ctx): Promise<Response> {
+export default class extends WorkerEntrypoint {
+	// ── RPC method: callable from other Workers via Service Binding ──
+	async submitFeedback(text: string): Promise<{ ok: boolean; error?: string }> {
+		const trimmed = text?.trim().slice(0, 600);
+		if (!trimmed) {
+			return { ok: false, error: "empty" };
+		}
+
+		const stub = this.env.FEEDBACK_ROOM.getByName("main");
+		await stub.fetch("https://internal/broadcast", {
+			method: "POST",
+			body: JSON.stringify({ text: trimmed }),
+		});
+
+		return { ok: true };
+	}
+
+	// ── HTTP handler: WebSocket upgrade + optional REST fallback ──
+	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		// ── CORS preflight (must come before the POST check) ──
+		// CORS preflight (only needed if you still allow direct HTTP POSTs)
 		if (url.pathname === "/api/feedback" && request.method === "OPTIONS") {
 			return new Response(null, { status: 204, headers: corsHeaders() });
 		}
 
-		// ── POST /api/feedback — receive from the existing form ──
+		// Optional: keep the HTTP POST route as a fallback
 		if (url.pathname === "/api/feedback" && request.method === "POST") {
 			try {
 				const body = (await request.json()) as { text?: string };
-				const text = body.text?.trim().slice(0, 600);
-				if (!text) {
-					return Response.json(
-						{ ok: false, error: "empty" },
-						{ status: 400, headers: corsHeaders() },
-					);
-				}
-
-				const stub = env.FEEDBACK_ROOM.getByName("main");
-				await stub.fetch("https://internal/broadcast", {
-					method: "POST",
-					body: JSON.stringify({ text }),
-				});
-
-				return Response.json({ ok: true }, { headers: corsHeaders() });
+				const result = await this.submitFeedback(body.text ?? "");
+				const status = result.ok ? 200 : 400;
+				return Response.json(result, { status, headers: corsHeaders() });
 			} catch {
 				return Response.json(
 					{ ok: false, error: "invalid body" },
@@ -134,15 +139,15 @@ export default {
 
 		// ── GET /ws — WebSocket upgrade (proxied to DO) ──
 		if (url.pathname === "/ws") {
-			const stub = env.FEEDBACK_ROOM.getByName("main");
+			const stub = this.env.FEEDBACK_ROOM.getByName("main");
 			return stub.fetch(request);
 		}
 
 		// ── Everything else falls through to static assets (public/) ──
 		// index.html is served automatically at "/"
 		return new Response("Not found", { status: 404 });
-	},
-} satisfies ExportedHandler<Env>;
+	}
+}
 
 // ─────────────────────────────────────────────
 // CORS helpers (adjust origin to your main site)
