@@ -117,26 +117,6 @@ export default class extends WorkerEntrypoint {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		// CORS preflight (only needed if you still allow direct HTTP POSTs)
-		if (url.pathname === "/api/feedback" && request.method === "OPTIONS") {
-			return new Response(null, { status: 204, headers: corsHeaders() });
-		}
-
-		// Optional: keep the HTTP POST route as a fallback
-		if (url.pathname === "/api/feedback" && request.method === "POST") {
-			try {
-				const body = (await request.json()) as { text?: string };
-				const result = await this.submitFeedback(body.text ?? "");
-				const status = result.ok ? 200 : 400;
-				return Response.json(result, { status, headers: corsHeaders() });
-			} catch {
-				return Response.json(
-					{ ok: false, error: "invalid body" },
-					{ status: 400, headers: corsHeaders() },
-				);
-			}
-		}
-
 		// ── GET /ws — WebSocket upgrade (proxied to DO) ──
 		if (url.pathname === "/ws") {
 			const stub = this.env.FEEDBACK_ROOM.getByName("main");
