@@ -9,21 +9,24 @@
    Brand tokens – swap these to re-theme instantly
    ────────────────────────────────────────────── */
 		:root {
-			/* Primary palette */
-			--brand-bg: #16162a;
-			--brand-surface: #fffef4;
-			--brand-text: #2c2c2c;
+			/* Raw brand palette */
+			--color-bz-yellow: #f5b83b;
+			--color-bz-dark: #111111;
+			--color-bz-red: #e31837;
+			--color-bz-white: #ffffff;
 
-			/* Accents */
-			--brand-accent: rgba(120, 255, 160, 0.6); /* "live" indicator */
+			/* Mapped design tokens */
+			--brand-bg: var(--color-bz-dark);
+			--brand-surface: var(--color-bz-white);
+			--brand-text: var(--color-bz-dark);
+
+			--brand-accent: var(--color-bz-yellow); /* "live" indicator   */
 			--brand-muted: rgba(255, 255, 255, 0.35); /* idle status text  */
 
-			/* Card details */
-			--card-shadow: rgba(0, 0, 0, 0.4);
-			--card-tape-bg: rgba(255, 255, 200, 0.7);
-			--card-tape-border: rgba(200, 200, 150, 0.5);
+			--card-shadow: rgba(17, 17, 17, 0.45);
+			--card-tape-bg: rgba(245, 184, 59, 0.55); /* translucent yellow */
+			--card-tape-border: rgba(245, 184, 59, 0.3);
 
-			/* Layout helpers (optional knobs) */
 			--card-width: 300px;
 			--card-radius: 3px;
 			--gap: 1.4rem;
