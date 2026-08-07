@@ -10,13 +10,14 @@ export class FeedbackRoom extends DurableObject {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 
-		// Ensure the history table exists (runs once per DO instance)
+		// Ensure the feedback table exists (runs once per DO instance)
 		this.ctx.storage.sql.exec(`
-			CREATE TABLE IF NOT EXISTS history (
-				id INTEGER PRIMARY KEY,
-				data TEXT NOT NULL
-			)
-		`);
+      CREATE TABLE IF NOT EXISTS feedback (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        text       TEXT    NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
 	}
 
 	async fetch(request: Request): Promise<Response> {
@@ -35,10 +36,11 @@ export class FeedbackRoom extends DurableObject {
 			const [client, server] = Object.values(pair);
 
 			this.ctx.acceptWebSocket(server);
+
 			this.sessions.add(server);
 
 			// Replay history so late-joiners see existing cards
-			const history = await this.getHistory();
+			const history = this.getHistory(200);
 			server.send(JSON.stringify({ type: "history", items: history }));
 
 			return new Response(null, { status: 101, webSocket: client });
@@ -58,31 +60,43 @@ export class FeedbackRoom extends DurableObject {
 
 	// ── Helpers ──
 
-	private async getHistory(): Promise<string[]> {
+	private getHistory(
+		limit = 200,
+	): { id: number; text: string; createdAt: number }[] {
 		const cursor = this.ctx.storage.sql.exec(
-			"SELECT data FROM history WHERE id = 1",
+			"SELECT id, text, created_at FROM feedback ORDER BY id DESC LIMIT ?",
+			limit,
 		);
+
+		const items: { id: number; text: string; createdAt: number }[] = [];
 		for (const row of cursor) {
-			return JSON.parse(row.data as string);
+			items.push({
+				id: row.id as number,
+				text: row.text as string,
+				createdAt: row.created_at as number,
+			});
 		}
-		return [];
+		// Flip so oldest-first for display
+		return items.reverse();
 	}
 
-	private async setHistory(items: string[]): Promise<void> {
-		await this.ctx.storage.sql.exec(
-			"INSERT OR REPLACE INTO history (id, data) VALUES (1, ?)",
-			JSON.stringify(items),
+	private insertFeedback(text: string): number {
+		const cursor = this.ctx.storage.sql.exec(
+			"INSERT INTO feedback (text) VALUES (?) RETURNING id",
+			text,
 		);
+		for (const row of cursor) {
+			return row.id as number;
+		}
+		throw new Error("insert failed");
 	}
 
 	private async broadcast(text: string): Promise<void> {
 		// Persist
-		const history = await this.getHistory();
-		history.push(text);
-		await this.setHistory(history);
+		const id = this.insertFeedback(text);
 
 		// Push to every connected display
-		const msg = JSON.stringify({ type: "new", text });
+		const msg = JSON.stringify({ type: "new", id, text });
 		for (const ws of this.sessions) {
 			try {
 				ws.send(msg);
@@ -105,6 +119,7 @@ export default class extends WorkerEntrypoint {
 		}
 
 		const stub = this.env.FEEDBACK_ROOM.getByName("main");
+
 		await stub.fetch("https://internal/broadcast", {
 			method: "POST",
 			body: JSON.stringify({ text: trimmed }),
