@@ -19,7 +19,6 @@ export class FeedbackRoom extends DurableObject {
 		`);
 	}
 
-
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
@@ -61,7 +60,7 @@ export class FeedbackRoom extends DurableObject {
 
 	private async getHistory(): Promise<string[]> {
 		const cursor = this.ctx.storage.sql.exec(
-			"SELECT data FROM history WHERE id = 1"
+			"SELECT data FROM history WHERE id = 1",
 		);
 		for (const row of cursor) {
 			return JSON.parse(row.data as string);
@@ -72,7 +71,7 @@ export class FeedbackRoom extends DurableObject {
 	private async setHistory(items: string[]): Promise<void> {
 		await this.ctx.storage.sql.exec(
 			"INSERT OR REPLACE INTO history (id, data) VALUES (1, ?)",
-			JSON.stringify(items)
+			JSON.stringify(items),
 		);
 	}
 
@@ -114,7 +113,7 @@ export default {
 				if (!text) {
 					return Response.json(
 						{ ok: false, error: "empty" },
-						{ status: 400, headers: corsHeaders() }
+						{ status: 400, headers: corsHeaders() },
 					);
 				}
 
@@ -128,7 +127,7 @@ export default {
 			} catch {
 				return Response.json(
 					{ ok: false, error: "invalid body" },
-					{ status: 400, headers: corsHeaders() }
+					{ status: 400, headers: corsHeaders() },
 				);
 			}
 		}
