@@ -11,11 +11,6 @@ export class FeedbackRoom extends DurableObject {
 		super(ctx, env);
 	}
 
-	/**
-	 * Handles two kinds of requests:
-	 *  - WebSocket upgrade from the display page  (GET /ws)
-	 *  - Internal broadcast call from the Worker  (POST /broadcast)
-	 */
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
@@ -56,9 +51,11 @@ export class FeedbackRoom extends DurableObject {
 	// ── Helpers ──
 
 	private async getHistory(): Promise<string[]> {
-		const row = await this.ctx.storage.sql.exec("SELECT data FROM history WHERE id = 1");
-		if (row && row.rows.length > 0) {
-			return JSON.parse(row.rows[0].data as string);
+		const cursor = this.ctx.storage.sql.exec(
+			"SELECT data FROM history WHERE id = 1"
+		);
+		for (const row of cursor) {
+			return JSON.parse(row.data as string);
 		}
 		return [];
 	}
@@ -95,18 +92,21 @@ export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
 
+		// ── CORS preflight (must come before the POST check) ──
+		if (url.pathname === "/api/feedback" && request.method === "OPTIONS") {
+			return new Response(null, { status: 204, headers: corsHeaders() });
+		}
+
 		// ── POST /api/feedback — receive from the existing form ──
 		if (url.pathname === "/api/feedback" && request.method === "POST") {
-			// Handle CORS preflight (form lives on a different origin)
-			if (request.method === "OPTIONS") {
-				return handleOptions(request);
-			}
-
 			try {
 				const body = (await request.json()) as { text?: string };
 				const text = body.text?.trim().slice(0, 600);
 				if (!text) {
-					return Response.json({ ok: false, error: "empty" }, { status: 400 });
+					return Response.json(
+						{ ok: false, error: "empty" },
+						{ status: 400, headers: corsHeaders() }
+					);
 				}
 
 				const stub = env.FEEDBACK_ROOM.getByName("main");
@@ -117,13 +117,11 @@ export default {
 
 				return Response.json({ ok: true }, { headers: corsHeaders() });
 			} catch {
-				return Response.json({ ok: false, error: "invalid" }, { status: 400 });
+				return Response.json(
+					{ ok: false, error: "invalid body" },
+					{ status: 400, headers: corsHeaders() }
+				);
 			}
-		}
-
-		// CORS preflight for /api/feedback
-		if (url.pathname === "/api/feedback" && request.method === "OPTIONS") {
-			return handleOptions(request);
 		}
 
 		// ── GET /ws — WebSocket upgrade (proxied to DO) ──
@@ -143,12 +141,8 @@ export default {
 // ─────────────────────────────────────────────
 function corsHeaders(): HeadersInit {
 	return {
-		"Access-Control-Allow-Origin": "*", // tighten for production
+		"Access-Control-Allow-Origin": "*",
 		"Access-Control-Allow-Methods": "POST, OPTIONS",
 		"Access-Control-Allow-Headers": "Content-Type",
 	};
-}
-
-function handleOptions(request: Request): Response {
-	return new Response(null, { status: 204, headers: corsHeaders() });
 }
