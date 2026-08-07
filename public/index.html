@@ -1,20 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
-	</head>
-	<body>
-		<h1 id="heading"></h1>
-		<p>This page comes from a static asset stored at `public/index.html` as configured in `wrangler.jsonc`.</p>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
-		</script>
-	</body>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Feedback Wall</title>
+	<style>
+		* { margin: 0; box-sizing: border-box; }
+
+		body {
+			min-height: 100vh;
+			background: #16162a;
+			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+			padding: 2.5rem;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 1.4rem;
+			align-content: flex-start;
+			justify-content: center;
+			overflow-x: hidden;
+		}
+
+		.card {
+			background: #fffef4;
+			color: #2c2c2c;
+			padding: 1.3rem 1.5rem;
+			width: 300px;
+			min-height: 80px;
+			border-radius: 3px;
+			box-shadow: 2px 5px 14px rgba(0, 0, 0, 0.4);
+			font-size: 1.05rem;
+			line-height: 1.55;
+			word-break: break-word;
+			animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+			position: relative;
+		}
+
+		/* subtle "tape" strip at top */
+		.card::before {
+			content: "";
+			position: absolute;
+			top: -8px;
+			left: 50%;
+			transform: translateX(-50%) rotate(-1deg);
+			width: 60px;
+			height: 16px;
+			background: rgba(255, 255, 200, 0.7);
+			border: 1px solid rgba(200, 200, 150, 0.5);
+		}
+
+		@keyframes pop {
+			from { opacity: 0; transform: scale(0.6) translateY(24px); }
+			to   { opacity: 1; transform: scale(1)   translateY(0); }
+		}
+
+		.status {
+			position: fixed;
+			bottom: 1rem;
+			right: 1.5rem;
+			font-size: 0.75rem;
+			color: rgba(255,255,255,0.35);
+			font-family: monospace;
+		}
+		.status.connected { color: rgba(120, 255, 160, 0.6); }
+	</style>
+</head>
+<body>
+	<div class="status" id="status">connecting…</div>
+
+	<script>
+		const statusEl = document.getElementById("status");
+		let reconnectDelay = 1000;
+
+		function addCard(text) {
+			const el = document.createElement("div");
+			el.className = "card";
+			el.textContent = text; // safe — no innerHTML
+			// slight random tilt for the "postcard" feel
+			const tilt = (Math.random() * 5 - 2.5).toFixed(1);
+			el.style.setProperty("--tilt", tilt + "deg");
+			el.style.transform = `rotate(${tilt}deg)`;
+			document.body.prepend(el);
+		}
+
+		function connect() {
+			const proto = location.protocol === "https:" ? "wss" : "ws";
+			const ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+			ws.onopen = () => {
+				statusEl.textContent = "● live";
+				statusEl.className = "status connected";
+				reconnectDelay = 1000;
+			};
+
+			ws.onmessage = (e) => {
+				const msg = JSON.parse(e.data);
+				if (msg.type === "history") {
+					msg.items.forEach(addCard);
+				} else if (msg.type === "new") {
+					addCard(msg.text);
+				}
+			};
+
+			ws.onclose = () => {
+				statusEl.textContent = "reconnecting…";
+				statusEl.className = "status";
+				setTimeout(connect, reconnectDelay);
+				reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+			};
+
+			ws.onerror = () => ws.close();
+		}
+
+		connect();
+	</script>
+</body>
 </html>

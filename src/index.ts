@@ -1,65 +1,154 @@
 import { DurableObject } from "cloudflare:workers";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
+// ─────────────────────────────────────────────
+// Durable Object: manages WebSocket connections
+// and broadcasts new feedback to all displays.
+// ─────────────────────────────────────────────
+export class FeedbackRoom extends DurableObject {
+	private sessions: Set<WebSocket> = new Set();
 
-
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 	}
 
 	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
+	 * Handles two kinds of requests:
+	 *  - WebSocket upgrade from the display page  (GET /ws)
+	 *  - Internal broadcast call from the Worker  (POST /broadcast)
 	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
+	async fetch(request: Request): Promise<Response> {
+		const url = new URL(request.url);
+
+		// ── Internal: Worker tells us to broadcast ──
+		if (url.pathname === "/broadcast" && request.method === "POST") {
+			const { text } = (await request.json()) as { text: string };
+			await this.broadcast(text);
+			return new Response("ok");
+		}
+
+		// ── WebSocket upgrade ──
+		if (request.headers.get("Upgrade") === "websocket") {
+			const pair = new WebSocketPair();
+			const [client, server] = Object.values(pair);
+
+			this.ctx.acceptWebSocket(server);
+			this.sessions.add(server);
+
+			// Replay history so late-joiners see existing cards
+			const history = await this.getHistory();
+			server.send(JSON.stringify({ type: "history", items: history }));
+
+			return new Response(null, { status: 101, webSocket: client });
+		}
+
+		return new Response("Not found", { status: 404 });
+	}
+
+	async webSocketClose(ws: WebSocket): Promise<void> {
+		this.sessions.delete(ws);
+		ws.close(1000, "closed");
+	}
+
+	async webSocketError(ws: WebSocket): Promise<void> {
+		this.sessions.delete(ws);
+	}
+
+	// ── Helpers ──
+
+	private async getHistory(): Promise<string[]> {
+		const row = await this.ctx.storage.sql.exec("SELECT data FROM history WHERE id = 1");
+		if (row && row.rows.length > 0) {
+			return JSON.parse(row.rows[0].data as string);
+		}
+		return [];
+	}
+
+	private async setHistory(items: string[]): Promise<void> {
+		await this.ctx.storage.sql.exec(
+			"INSERT OR REPLACE INTO history (id, data) VALUES (1, ?)",
+			JSON.stringify(items)
+		);
+	}
+
+	private async broadcast(text: string): Promise<void> {
+		// Persist
+		const history = await this.getHistory();
+		history.push(text);
+		await this.setHistory(history);
+
+		// Push to every connected display
+		const msg = JSON.stringify({ type: "new", text });
+		for (const ws of this.sessions) {
+			try {
+				ws.send(msg);
+			} catch {
+				this.sessions.delete(ws);
+			}
+		}
 	}
 }
 
+// ─────────────────────────────────────────────
+// Worker: routes requests
+// ─────────────────────────────────────────────
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
 	async fetch(request, env, ctx): Promise<Response> {
-		// Create a stub to open a communication channel with the Durable Object
-		// instance named "foo".
-		//
-		// Requests from all Workers to the Durable Object instance named "foo"
-		// will go to a single remote Durable Object instance.
-		const stub = env.MY_DURABLE_OBJECT.getByName("foo");
+		const url = new URL(request.url);
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance.
-		const greeting = await stub.sayHello("world");
+		// ── POST /api/feedback — receive from the existing form ──
+		if (url.pathname === "/api/feedback" && request.method === "POST") {
+			// Handle CORS preflight (form lives on a different origin)
+			if (request.method === "OPTIONS") {
+				return handleOptions(request);
+			}
 
-		return new Response(greeting);
+			try {
+				const body = (await request.json()) as { text?: string };
+				const text = body.text?.trim().slice(0, 600);
+				if (!text) {
+					return Response.json({ ok: false, error: "empty" }, { status: 400 });
+				}
+
+				const stub = env.FEEDBACK_ROOM.getByName("main");
+				await stub.fetch("https://internal/broadcast", {
+					method: "POST",
+					body: JSON.stringify({ text }),
+				});
+
+				return Response.json({ ok: true }, { headers: corsHeaders() });
+			} catch {
+				return Response.json({ ok: false, error: "invalid" }, { status: 400 });
+			}
+		}
+
+		// CORS preflight for /api/feedback
+		if (url.pathname === "/api/feedback" && request.method === "OPTIONS") {
+			return handleOptions(request);
+		}
+
+		// ── GET /ws — WebSocket upgrade (proxied to DO) ──
+		if (url.pathname === "/ws") {
+			const stub = env.FEEDBACK_ROOM.getByName("main");
+			return stub.fetch(request);
+		}
+
+		// ── Everything else falls through to static assets (public/) ──
+		// index.html is served automatically at "/"
+		return new Response("Not found", { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;
+
+// ─────────────────────────────────────────────
+// CORS helpers (adjust origin to your main site)
+// ─────────────────────────────────────────────
+function corsHeaders(): HeadersInit {
+	return {
+		"Access-Control-Allow-Origin": "*", // tighten for production
+		"Access-Control-Allow-Methods": "POST, OPTIONS",
+		"Access-Control-Allow-Headers": "Content-Type",
+	};
+}
+
+function handleOptions(request: Request): Response {
+	return new Response(null, { status: 204, headers: corsHeaders() });
+}
