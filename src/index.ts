@@ -9,7 +9,16 @@ export class FeedbackRoom extends DurableObject {
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+
+		// Ensure the history table exists (runs once per DO instance)
+		this.ctx.storage.sql.exec(`
+			CREATE TABLE IF NOT EXISTS history (
+				id INTEGER PRIMARY KEY,
+				data TEXT NOT NULL
+			)
+		`);
 	}
+
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
