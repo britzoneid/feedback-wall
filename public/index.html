@@ -235,16 +235,6 @@
 			);
 		}
 
-		.card--alert {
-			background: var(--brand-alert);
-			background-image: linear-gradient(160deg, #f0294a, #c9132f);
-			color: #fff;
-		}
-		.card--alert::before {
-			background: rgba(255, 255, 255, 0.8);
-			border-color: rgba(255, 255, 255, 0.4);
-		}
-
 		/* tiny timestamp chip */
 		.meta {
 			position: absolute;
@@ -356,8 +346,7 @@
 			const r = Math.random();
 			if (text.length < 30) return r < 0.6 ? "card--accent" : "card--dark";
 			if (r < 0.1) return "card--accent";
-			if (r < 0.18) return "card--dark";
-			if (r < 0.22) return "card--alert";
+			if (r < 0.22) return "card--dark";
 			return "";
 		}
 
