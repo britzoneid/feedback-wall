@@ -381,6 +381,8 @@
 			wall.prepend(el); // newest first; dense flow re-packs automatically
 		}
 
+		let pingTimer;
+
 		function connect() {
 			const proto = location.protocol === "https:" ? "wss" : "ws";
 			const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -389,11 +391,17 @@
 				statusEl.textContent = "live";
 				statusEl.className = "status connected";
 				reconnectDelay = 1000;
+				pingTimer = setInterval(() => {
+					if (ws.readyState === WebSocket.OPEN) {
+						ws.send(JSON.stringify({ type: "ping" }));
+					}
+				}, 30000);
 			};
 
 			ws.onmessage = (e) => {
 				const msg = JSON.parse(e.data);
 				if (msg.type === "history") {
+					wall.innerHTML = "";
 					msg.items.forEach((item, i) => {
 						addCard(item.text, { delay: i * 60, createdAt: item.createdAt });
 					});
@@ -403,6 +411,7 @@
 			};
 
 			ws.onclose = () => {
+				clearInterval(pingTimer);
 				statusEl.textContent = "reconnecting…";
 				statusEl.className = "status";
 				setTimeout(connect, reconnectDelay);
