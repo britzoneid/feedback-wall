@@ -5,8 +5,6 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 // and broadcasts new feedback to all displays.
 // ─────────────────────────────────────────────
 export class FeedbackRoom extends DurableObject {
-	private sessions: Set<WebSocket> = new Set();
-
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 
@@ -26,7 +24,7 @@ export class FeedbackRoom extends DurableObject {
 		// ── Internal: Worker tells us to broadcast ──
 		if (url.pathname === "/broadcast" && request.method === "POST") {
 			const { text } = (await request.json()) as { text: string };
-			await this.broadcast(text);
+			this.broadcast(text);
 			return new Response("ok");
 		}
 
@@ -36,8 +34,6 @@ export class FeedbackRoom extends DurableObject {
 			const [client, server] = Object.values(pair);
 
 			this.ctx.acceptWebSocket(server);
-
-			this.sessions.add(server);
 
 			// Replay history so late-joiners see existing cards
 			const history = this.getHistory(200);
@@ -49,13 +45,24 @@ export class FeedbackRoom extends DurableObject {
 		return new Response("Not found", { status: 404 });
 	}
 
-	async webSocketClose(ws: WebSocket): Promise<void> {
-		this.sessions.delete(ws);
-		ws.close(1000, "closed");
+	async webSocketMessage(
+		_ws: WebSocket,
+		_message: string | ArrayBuffer,
+	): Promise<void> {
+		// no inbound messages expected; keep-alive ping if needed
+	}
+
+	async webSocketClose(
+		ws: WebSocket,
+		code: number,
+		reason: string,
+		_wasClean: boolean,
+	): Promise<void> {
+		ws.close(code, reason);
 	}
 
 	async webSocketError(ws: WebSocket): Promise<void> {
-		this.sessions.delete(ws);
+		ws.close(1011, "error");
 	}
 
 	// ── Helpers ──
@@ -91,17 +98,17 @@ export class FeedbackRoom extends DurableObject {
 		throw new Error("insert failed");
 	}
 
-	private async broadcast(text: string): Promise<void> {
+	private broadcast(text: string): void {
 		// Persist
 		const id = this.insertFeedback(text);
 
 		// Push to every connected display
 		const msg = JSON.stringify({ type: "new", id, text });
-		for (const ws of this.sessions) {
+		for (const ws of this.ctx.getWebSockets()) {
 			try {
 				ws.send(msg);
 			} catch {
-				this.sessions.delete(ws);
+				ws.close(1011, "send failed");
 			}
 		}
 	}

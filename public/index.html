@@ -350,7 +350,7 @@
 			return "";
 		}
 
-		function addCard(text, { delay = 0 } = {}) {
+		function addCard(text, { delay = 0, createdAt = null } = {}) {
 			const tier = tierFor(text);
 
 			const el = document.createElement("article");
@@ -370,7 +370,8 @@
 
 			const meta = document.createElement("span");
 			meta.className = "meta";
-			meta.textContent = new Date().toLocaleTimeString([], {
+			const ts = createdAt ? new Date(createdAt * 1000) : new Date();
+			meta.textContent = ts.toLocaleTimeString([], {
 				hour: "2-digit",
 				minute: "2-digit",
 			});
@@ -392,9 +393,11 @@
 			ws.onmessage = (e) => {
 				const msg = JSON.parse(e.data);
 				if (msg.type === "history") {
-					msg.items.forEach((text, i) => addCard(text, { delay: i * 60 }));
+					msg.items.forEach((item, i) => {
+						addCard(item.text, { delay: i * 60, createdAt: item.createdAt });
+					});
 				} else if (msg.type === "new") {
-					addCard(msg.text);
+					addCard(msg.text, { createdAt: Math.floor(Date.now() / 1000) });
 				}
 			};
 
