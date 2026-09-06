@@ -1,0 +1,315 @@
+/* ──────────────────────────────────────────────
+   Brand tokens – swap these to re-theme instantly
+────────────────────────────────────────────── */
+:root {
+	/* Raw brand palette */
+	--color-bz-yellow: #f5b83b;
+	--color-bz-dark: #111111;
+	--color-bz-red: #e31837;
+	--color-bz-white: #ffffff;
+
+	/* Mapped design tokens */
+	--brand-bg: var(--color-bz-dark);
+	--brand-surface: var(--color-bz-white);
+	--brand-text: var(--color-bz-dark);
+	--brand-accent: var(--color-bz-yellow);
+	--brand-alert: var(--color-bz-red);
+
+	--brand-muted: rgba(255, 255, 255, 0.35);
+
+	--card-shadow: rgba(0, 0, 0, 0.45);
+	--card-tape-bg: rgba(245, 184, 59, 0.55);
+	--card-tape-border: rgba(245, 184, 59, 0.3);
+
+	/* Bento grid */
+	--cell: 168px; /* base grid cell */
+	--gap: 14px;
+	--card-radius: 18px;
+
+	/* Card size scale (in cells) */
+	--s1: var(--cell);
+}
+
+/* ────────────────────────────────────────────── */
+
+* {
+	margin: 0;
+	box-sizing: border-box;
+}
+
+body {
+	min-height: 100vh;
+	background:
+		radial-gradient(
+			1200px 600px at 15% -10%,
+			rgba(245, 184, 59, 0.07),
+			transparent 60%
+		),
+		radial-gradient(
+			900px 500px at 95% 110%,
+			rgba(227, 24, 55, 0.06),
+			transparent 60%
+		),
+		var(--brand-bg);
+	font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+	padding: clamp(1rem, 3vw, 2.5rem);
+	overflow-x: hidden;
+}
+
+/* ──────────────────────────────────────────────
+   Bento grid — dense packing, mixed card sizes
+────────────────────────────────────────────── */
+.wall {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(var(--cell), 1fr));
+	grid-auto-rows: var(--cell);
+	grid-auto-flow: dense;
+	gap: var(--gap);
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+/* ── Card base ── */
+.card {
+	position: relative;
+	border-radius: var(--card-radius);
+	padding: 1.35rem 1.45rem;
+	display: flex;
+	align-items: flex-end;
+	overflow: hidden;
+	color: var(--brand-text);
+	background: var(--brand-surface);
+	background-image: linear-gradient(
+		160deg,
+		rgba(255, 255, 255, 0.9),
+		rgba(240, 240, 238, 0.95)
+	);
+	box-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.25),
+		0 12px 32px -8px var(--card-shadow);
+	word-break: break-word;
+	overflow-wrap: anywhere;
+	line-height: 1.4;
+	animation: pop 0.55s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+	transition:
+		transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+		box-shadow 0.35s ease;
+}
+
+.card:hover {
+	transform: translateY(-4px) rotate(var(--tilt, 0deg)) scale(1.015);
+	box-shadow:
+		0 2px 4px rgba(0, 0, 0, 0.3),
+		0 24px 48px -12px var(--card-shadow);
+	z-index: 2;
+}
+
+/* Signature tape strip — kept, refined */
+.card::before {
+	content: "";
+	position: absolute;
+	top: -7px;
+	left: 50%;
+	transform: translateX(-50%) rotate(var(--tape-rot, -1.5deg));
+	width: 64px;
+	height: 18px;
+	background: var(--card-tape-bg);
+	border: 1px solid var(--card-tape-border);
+	border-radius: 2px;
+	backdrop-filter: blur(2px);
+	z-index: 1;
+}
+
+/* Soft sheen for polish */
+.card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	background: linear-gradient(
+		115deg,
+		rgba(255, 255, 255, 0.35) 0%,
+		transparent 30%
+	);
+}
+
+/* ── Size tiers: card footprint matches content length ──
+   xs  quote (<30 chars)      → 1×1, big type
+   sm  (30–80)                → 1×2 (wide)
+   md  (80–160)               → 1×2 or 2×1 handled by flow
+   lg  (160–300)              → 2×2
+   xl  (300+)                 → 2×3
+────────────────────────────────────────────── */
+.card--xs {
+	grid-column: span 1;
+	grid-row: span 1;
+	font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+	font-weight: 700;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	line-height: 1.3;
+}
+
+.card--sm {
+	grid-column: span 2;
+	grid-row: span 1;
+	font-size: 1.02rem;
+	align-items: center;
+}
+
+.card--md {
+	grid-column: span 2;
+	grid-row: span 2;
+	font-size: 1.15rem;
+	align-items: flex-start;
+}
+
+.card--lg {
+	grid-column: span 2;
+	grid-row: span 2;
+	font-size: 1rem;
+	align-items: flex-start;
+}
+
+.card--xl {
+	grid-column: span 2;
+	grid-row: span 3;
+	font-size: 0.98rem;
+	align-items: flex-start;
+}
+
+/* clamp text so it never overflows its tile */
+.card .text {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	position: relative;
+	z-index: 1;
+	white-space: pre-wrap;
+}
+.card--xs .text {
+	-webkit-line-clamp: 3;
+}
+.card--sm .text {
+	-webkit-line-clamp: 2;
+}
+.card--md .text {
+	-webkit-line-clamp: 6;
+}
+.card--lg .text {
+	-webkit-line-clamp: 9;
+}
+.card--xl .text {
+	-webkit-line-clamp: 13;
+}
+
+/* ── Color variants (deterministic per card) ── */
+.card--accent {
+	background: var(--brand-accent);
+	background-image: linear-gradient(160deg, #ffcd5e, #eda92a);
+	color: var(--color-bz-dark);
+}
+.card--accent::before {
+	background: rgba(17, 17, 17, 0.75);
+	border-color: rgba(17, 17, 17, 0.35);
+}
+
+.card--dark {
+	background: #1c1c1c;
+	background-image: linear-gradient(160deg, #232323, #161616);
+	color: var(--brand-surface);
+	border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.card--dark::after {
+	background: linear-gradient(
+		115deg,
+		rgba(255, 255, 255, 0.06) 0%,
+		transparent 30%
+	);
+}
+
+/* tiny timestamp chip */
+.meta {
+	position: absolute;
+	top: 0.8rem;
+	right: 1rem;
+	font-size: 0.62rem;
+	font-family: ui-monospace, monospace;
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+	opacity: 0.45;
+	z-index: 1;
+}
+
+@keyframes pop {
+	from {
+		opacity: 0;
+		transform: scale(0.7) translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+/* ── Status pill ── */
+.status {
+	position: fixed;
+	bottom: 1rem;
+	right: 1.25rem;
+	font-size: 0.72rem;
+	font-family: ui-monospace, monospace;
+	color: var(--brand-muted);
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.09);
+	backdrop-filter: blur(8px);
+	padding: 0.4rem 0.85rem;
+	border-radius: 999px;
+	z-index: 10;
+}
+.status.connected {
+	color: var(--brand-accent);
+	border-color: rgba(245, 184, 59, 0.3);
+}
+.status.connected::before {
+	content: "●";
+	margin-right: 0.4rem;
+	animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+/* ── Responsive ── */
+@media (max-width: 720px) {
+	:root {
+		--cell: 128px;
+	}
+	.card--xl {
+		grid-row: span 4;
+	}
+}
+@media (max-width: 420px) {
+	.wall {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.card--sm,
+	.card--md,
+	.card--lg,
+	.card--xl {
+		grid-column: span 2;
+	}
+	.card--xs {
+		grid-column: span 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.card {
+		animation: none;
+		transition: none;
+	}
+}
